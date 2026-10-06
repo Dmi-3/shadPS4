@@ -70,6 +70,7 @@ int main(int argc, char* argv[]) {
     bool append_log{};
     bool warmup_cache{};
     bool sync_submit_done{};
+    bool renderdoc_present_capture{};
     std::optional<std::filesystem::path> warm_template;
 
     std::optional<std::filesystem::path> addGameFolder;
@@ -109,6 +110,8 @@ int main(int argc, char* argv[]) {
                  "Preload the recorded pipeline cache without executing the game");
     app.add_flag("--sync-submit-done", sync_submit_done,
                  "Diagnostic: wait up to five seconds for queued commands at frame submission");
+    app.add_flag("--renderdoc-present-capture", renderdoc_present_capture,
+                 "Diagnostic: capture a single presented frame with RenderDoc");
     app.add_option("--warmup-template", warm_template,
                    "Experimental compute shader warmup with placeholder resource descriptors")
         ->check(CLI::ExistingFile);
@@ -269,6 +272,7 @@ int main(int argc, char* argv[]) {
     emulator->waitForDebuggerBeforeRun = waitForDebugger;
     emulator->warmupCacheOnly = warmup_cache;
     emulator->syncSubmitDone = sync_submit_done;
+    emulator->renderdocPresentCapture = renderdoc_present_capture;
     if (warm_template) {
         emulator->warmTemplateFile = *warm_template;
     }

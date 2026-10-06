@@ -578,6 +578,7 @@ void Emulator::Run(std::filesystem::path file, std::vector<std::string> args,
     linker = Common::Singleton<Core::Linker>::Instance();
 
     // Load renderdoc module
+    VideoCore::SetPresentCapture(renderdocPresentCapture);
     VideoCore::LoadRenderDoc();
 
     // Initialize patcher

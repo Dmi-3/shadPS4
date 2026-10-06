@@ -25,10 +25,15 @@ enum class CaptureState {
     InProgress,
 };
 static CaptureState capture_state{CaptureState::Idle};
+static bool present_capture{};
 static std::atomic<u32> screenshot_game_only_count{0};
 static std::atomic<u32> screenshot_with_overlays_count{0};
 
 RENDERDOC_API_1_6_0* rdoc_api{};
+
+void SetPresentCapture(bool enabled) {
+    present_capture = enabled;
+}
 
 void LoadRenderDoc() {
 #ifdef WIN32
@@ -94,7 +99,7 @@ void LoadRenderDoc() {
 }
 
 void StartCapture() {
-    if (!rdoc_api) {
+    if (!rdoc_api || present_capture) {
         return;
     }
 
@@ -105,7 +110,7 @@ void StartCapture() {
 }
 
 void EndCapture() {
-    if (!rdoc_api) {
+    if (!rdoc_api || present_capture) {
         return;
     }
 
@@ -116,6 +121,10 @@ void EndCapture() {
 }
 
 void TriggerCapture() {
+    if (present_capture && rdoc_api) {
+        rdoc_api->TriggerCapture();
+        return;
+    }
     if (capture_state == CaptureState::Idle) {
         capture_state = CaptureState::Triggered;
     }

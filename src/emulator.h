@@ -49,6 +49,7 @@ public:
     bool waitForDebuggerBeforeRun{false};
     bool warmupCacheOnly{false};
     bool syncSubmitDone{false};
+    bool renderdocPresentCapture{false};
     std::filesystem::path warmTemplateFile;
     int warmupExitCode{1};
 
