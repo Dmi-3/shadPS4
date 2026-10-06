@@ -578,8 +578,10 @@ void Emulator::Run(std::filesystem::path file, std::vector<std::string> args,
     }
 
     // Extract and load trophies.
-    game_info.trophy_index_map =
-        ExtractTrophies("/app0/sce_sys/npbind.dat", "/app0/sce_sys/trophy");
+    if (!warmupCacheOnly) {
+        game_info.trophy_index_map =
+            ExtractTrophies("/app0/sce_sys/npbind.dat", "/app0/sce_sys/trophy");
+    }
 
     std::string game_title = fmt::format("{} - {} <{}>", id, title, app_version);
     std::string window_title = "";
