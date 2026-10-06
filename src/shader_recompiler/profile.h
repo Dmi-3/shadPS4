@@ -7,6 +7,9 @@
 
 namespace Shader {
 
+// Opt-in replay investigation only; normal IEEE arithmetic remains the default.
+inline bool diagnose_zero_nan_products{};
+
 struct Profile {
     u32 max_viewport_width{};
     u32 max_viewport_height{};

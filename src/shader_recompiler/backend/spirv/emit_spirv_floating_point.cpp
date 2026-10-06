@@ -78,7 +78,17 @@ Id EmitFPMedTri32(EmitContext& ctx, Id a, Id b, Id c) {
 }
 
 Id EmitFPMul32(EmitContext& ctx, IR::Inst* inst, Id a, Id b) {
-    return Decorate(ctx, inst, ctx.OpFMul(ctx.F32[1], a, b));
+    const Id product = Decorate(ctx, inst, ctx.OpFMul(ctx.F32[1], a, b));
+    if (!Shader::diagnose_zero_nan_products) {
+        return product;
+    }
+    const Id zero = ctx.ConstF32(0.0f);
+    const Id a_zero_b_nan =
+        ctx.OpLogicalAnd(ctx.U1[1], ctx.OpFOrdEqual(ctx.U1[1], a, zero), ctx.OpIsNan(ctx.U1[1], b));
+    const Id b_zero_a_nan =
+        ctx.OpLogicalAnd(ctx.U1[1], ctx.OpFOrdEqual(ctx.U1[1], b, zero), ctx.OpIsNan(ctx.U1[1], a));
+    const Id zero_nan = ctx.OpLogicalOr(ctx.U1[1], a_zero_b_nan, b_zero_a_nan);
+    return ctx.OpSelect(ctx.F32[1], zero_nan, zero, product);
 }
 
 Id EmitFPMul64(EmitContext& ctx, IR::Inst* inst, Id a, Id b) {

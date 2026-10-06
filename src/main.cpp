@@ -25,6 +25,7 @@
 #include "core/user_settings.h"
 #include "emulator.h"
 #include "imgui/big_picture/big_picture.h"
+#include "shader_recompiler/profile.h"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -71,6 +72,7 @@ int main(int argc, char* argv[]) {
     bool warmup_cache{};
     bool sync_submit_done{};
     bool renderdoc_present_capture{};
+    bool diagnose_zero_nan_products{};
     std::optional<std::filesystem::path> warm_template;
 
     std::optional<std::filesystem::path> addGameFolder;
@@ -112,6 +114,8 @@ int main(int argc, char* argv[]) {
                  "Diagnostic: wait up to five seconds for queued commands at frame submission");
     app.add_flag("--renderdoc-present-capture", renderdoc_present_capture,
                  "Diagnostic: capture a single presented frame with RenderDoc");
+    app.add_flag("--diagnose-zero-nan-products", diagnose_zero_nan_products,
+                 "Diagnostic: replace zero times NaN with zero; use an isolated shader cache");
     app.add_option("--warmup-template", warm_template,
                    "Experimental compute shader warmup with placeholder resource descriptors")
         ->check(CLI::ExistingFile);
@@ -273,6 +277,11 @@ int main(int argc, char* argv[]) {
     emulator->warmupCacheOnly = warmup_cache;
     emulator->syncSubmitDone = sync_submit_done;
     emulator->renderdocPresentCapture = renderdoc_present_capture;
+    Shader::diagnose_zero_nan_products = diagnose_zero_nan_products;
+    if (diagnose_zero_nan_products) {
+        LOG_WARNING(Config,
+                    "Diagnostic zero-times-NaN arithmetic enabled; isolated shader cache selected");
+    }
     if (warm_template) {
         emulator->warmTemplateFile = *warm_template;
     }
