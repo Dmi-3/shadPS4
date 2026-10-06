@@ -289,6 +289,9 @@ void Emulator::Run(std::filesystem::path file, std::vector<std::string> args,
                    std::vector<std::pair<std::filesystem::path, std::string>> mounts,
                    std::vector<std::string> const& env_vars, bool append_log) {
     Common::SetCurrentThreadName("shadPS4:Main");
+    if (syncSubmitDone) {
+        LOG_WARNING(Config, "Diagnostic synchronous SubmitDone enabled (five-second wait limit)");
+    }
 #ifdef _WIN32
     if (warmupCacheOnly) {
         SetPriorityClass(GetCurrentProcess(), BELOW_NORMAL_PRIORITY_CLASS);

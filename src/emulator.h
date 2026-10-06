@@ -48,6 +48,7 @@ public:
     const char* executableName;
     bool waitForDebuggerBeforeRun{false};
     bool warmupCacheOnly{false};
+    bool syncSubmitDone{false};
     std::filesystem::path warmTemplateFile;
     int warmupExitCode{1};
 

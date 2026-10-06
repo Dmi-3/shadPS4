@@ -20,6 +20,7 @@
 #include "core/libraries/videoout/video_out.h"
 #include "core/memory.h"
 #include "core/platform.h"
+#include "emulator.h"
 #include "video_core/amdgpu/liverpool.h"
 #include "video_core/amdgpu/pm4_cmds.h"
 #include "video_core/renderer_vulkan/vk_presenter.h"
@@ -2357,6 +2358,11 @@ s32 PS4_SYSV_ABI sceGnmSubmitDone() {
     LOG_DEBUG(Lib_GnmDriver, "called");
     std::scoped_lock lk{m_submit_lock};
     WaitGpuIdle();
+    if (Common::Singleton<Core::Emulator>::Instance()->syncSubmitDone &&
+        !liverpool->WaitGpuIdleFor(std::chrono::seconds{5})) {
+        LOG_WARNING(Lib_GnmDriver, "Diagnostic submission wait timed out at frame {}",
+                    frames_submitted);
+    }
     if (!liverpool->IsGpuIdle()) {
         submission_lock = true;
     }

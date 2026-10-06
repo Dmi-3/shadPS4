@@ -87,6 +87,11 @@ public:
         return num_submits == 0;
     }
 
+    bool WaitGpuIdleFor(std::chrono::milliseconds timeout) noexcept {
+        std::unique_lock lk{submit_mutex};
+        return submit_cv.wait_for(lk, timeout, [this] { return num_submits == 0; });
+    }
+
     void SetVoPort(Libraries::VideoOut::VideoOutPort* port) {
         vo_port = port;
     }

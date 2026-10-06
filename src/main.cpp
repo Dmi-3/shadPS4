@@ -69,6 +69,7 @@ int main(int argc, char* argv[]) {
     bool sameProcess = false;
     bool append_log{};
     bool warmup_cache{};
+    bool sync_submit_done{};
     std::optional<std::filesystem::path> warm_template;
 
     std::optional<std::filesystem::path> addGameFolder;
@@ -106,6 +107,8 @@ int main(int argc, char* argv[]) {
     app.add_flag("--log-append", append_log);
     app.add_flag("--warmup-cache", warmup_cache,
                  "Preload the recorded pipeline cache without executing the game");
+    app.add_flag("--sync-submit-done", sync_submit_done,
+                 "Diagnostic: wait up to five seconds for queued commands at frame submission");
     app.add_option("--warmup-template", warm_template,
                    "Experimental compute shader warmup with placeholder resource descriptors")
         ->check(CLI::ExistingFile);
@@ -265,6 +268,7 @@ int main(int argc, char* argv[]) {
     emulator->executableName = argv[0];
     emulator->waitForDebuggerBeforeRun = waitForDebugger;
     emulator->warmupCacheOnly = warmup_cache;
+    emulator->syncSubmitDone = sync_submit_done;
     if (warm_template) {
         emulator->warmTemplateFile = *warm_template;
     }

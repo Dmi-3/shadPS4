@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright 2024-2026 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <array>
 #include <fmt/format.h>
 #include "common/arch.h"
 #include "common/assert.h"
@@ -142,6 +143,34 @@ static LONG WINAPI SignalHandler(EXCEPTION_POINTERS* pExp) noexcept {
         use_static_windows_guest_red_zone_protection ? static_protection_exception : true;
     if (report_unhandled) {
         LOG_CRITICAL(Debug, "Unhandled Exception code {:#x} at {}", code, address);
+        const auto& context = *pExp->ContextRecord;
+        if (code == EXCEPTION_ACCESS_VIOLATION && pExp->ExceptionRecord->NumberParameters >= 2) {
+            LOG_CRITICAL(Debug, "Access violation operation={} target={:#x}",
+                         pExp->ExceptionRecord->ExceptionInformation[0],
+                         pExp->ExceptionRecord->ExceptionInformation[1]);
+        }
+        std::array<u8, 15> bytes{};
+        SIZE_T bytes_read{};
+        if (ReadProcessMemory(GetCurrentProcess(), reinterpret_cast<void*>(context.Rip),
+                              bytes.data(), bytes.size(), &bytes_read) &&
+            bytes_read) {
+            ZydisDecodedInstruction instruction{};
+            ZydisDecodedOperand operands[ZYDIS_MAX_OPERAND_COUNT]{};
+            auto* decoder = Common::Decoder::Instance();
+            if (ZYAN_SUCCESS(
+                    decoder->decodeInstruction(instruction, operands, bytes.data(), bytes_read))) {
+                LOG_CRITICAL(Debug, "Fault instruction: {}",
+                             decoder->disassembleInst(instruction, operands, context.Rip));
+            }
+        }
+        LOG_CRITICAL(Debug, "RIP={:#x} RSP={:#x} RBP={:#x} RFLAGS={:#x}", context.Rip, context.Rsp,
+                     context.Rbp, context.EFlags);
+        LOG_CRITICAL(Debug, "RAX={:#x} RBX={:#x} RCX={:#x} RDX={:#x} RSI={:#x} RDI={:#x}",
+                     context.Rax, context.Rbx, context.Rcx, context.Rdx, context.Rsi, context.Rdi);
+        LOG_CRITICAL(
+            Debug, "R8={:#x} R9={:#x} R10={:#x} R11={:#x} R12={:#x} R13={:#x} R14={:#x} R15={:#x}",
+            context.R8, context.R9, context.R10, context.R11, context.R12, context.R13, context.R14,
+            context.R15);
         Common::Singleton<Core::Emulator>::Instance()->Shutdown();
     }
 
