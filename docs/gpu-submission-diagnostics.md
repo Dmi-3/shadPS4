@@ -51,3 +51,5 @@ The first live diagnostic run crashed while loading the scene with the existing 
 
 
 Local cache seeding experiment: copied 3298 files into the isolated diagnostic root, instrumenting scalar FP32 OpFMul in 1147 of 1176 modules (114471 products). No normal cache files were modified. All resource interfaces, metadata and pipeline keys remain unchanged. A representative rewritten weapon module was accepted by RenderDoc BuildTargetShader and produced finite RGB (0.0166168, 0.0165405, 0.0120163) at event 10526 instead of NaN. This local binary experiment is not distributed or committed; fresh native compilation implements the same predicate. Seed counts do not measure driver cache hits or whole-game coverage.
+
+Live verification after isolated warmup (945/945, exit 0): user reports partial improvement, with Drake's weapon almost entirely normal. Remaining weapon defects, aiming blur and sustained stability are still unverified. This confirms an effect of the intervention without establishing an upstream fix.
