@@ -68,6 +68,7 @@ int main(int argc, char* argv[]) {
     bool bigPicture = false;
     bool sameProcess = false;
     bool append_log{};
+    bool warmup_cache{};
 
     std::optional<std::filesystem::path> addGameFolder;
     std::optional<std::filesystem::path> setAddonFolder;
@@ -102,6 +103,8 @@ int main(int argc, char* argv[]) {
     app.add_flag("--config-clean", configClean);
     app.add_flag("--config-global", configGlobal);
     app.add_flag("--log-append", append_log);
+    app.add_flag("--warmup-cache", warmup_cache,
+                 "Preload the recorded pipeline cache without executing the game");
 
     app.add_option("--add-game-folder", addGameFolder)->check(CLI::ExistingDirectory);
     app.add_option("--set-addon-folder", setAddonFolder)->check(CLI::ExistingDirectory);
@@ -160,7 +163,9 @@ int main(int argc, char* argv[]) {
 
     // Load configurations
     EmulatorSettings.Load();
-    UserSettings.Load();
+    if (!warmup_cache) {
+        UserSettings.Load();
+    }
 
     if (bigPicture) {
         BigPictureMode::Launch(argv[0], sameProcess);
@@ -254,7 +259,11 @@ int main(int argc, char* argv[]) {
     auto* emulator = Common::Singleton<Core::Emulator>::Instance();
     emulator->executableName = argv[0];
     emulator->waitForDebuggerBeforeRun = waitForDebugger;
+    emulator->warmupCacheOnly = warmup_cache;
     emulator->Run(ebootPath, gameArgs, overrideRoot, mounts, env_vars, append_log);
 
+    if (warmup_cache) {
+        std::quick_exit(emulator->warmupExitCode);
+    }
     return 0;
 }

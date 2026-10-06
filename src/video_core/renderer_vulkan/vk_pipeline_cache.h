@@ -76,6 +76,13 @@ public:
     ~PipelineCache();
 
     void WarmUp();
+    u32 GetPreloadedCount() const {
+        return preloaded_count;
+    }
+    u32 GetPreloadTotal() const {
+        return preload_total;
+    }
+    bool IsNvidiaDriver() const;
     void Sync();
 
     bool LoadComputePipeline(Serialization::Archive& ar);
@@ -126,6 +133,8 @@ private:
     vk::UniquePipelineCache pipeline_cache;
     vk::UniquePipelineLayout pipeline_layout;
     Shader::Profile profile{};
+    u32 preloaded_count{};
+    u32 preload_total{};
     Shader::Pools pools;
     DrawIndirectParams draw_indirect_params{};
     tsl::robin_map<size_t, std::unique_ptr<Program>> program_cache;

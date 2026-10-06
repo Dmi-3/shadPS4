@@ -44,8 +44,14 @@
 #include "core/memory.h"
 #include "core/user_settings.h"
 #include "emulator.h"
+#include "video_core/amdgpu/liverpool.h"
 #include "video_core/cache_storage.h"
 #include "video_core/renderdoc.h"
+#include "video_core/renderer_vulkan/vk_presenter.h"
+#include "video_core/renderer_vulkan/vk_rasterizer.h"
+
+extern std::unique_ptr<Vulkan::Presenter> presenter;
+extern std::unique_ptr<AmdGpu::Liverpool> liverpool;
 
 #ifdef _WIN32
 #include <WinSock2.h>
@@ -96,7 +102,9 @@ void Emulator::Shutdown() {
     if (play_time_thread.joinable()) {
         play_time_thread.join();
     }
-    UpdatePlayTime(Common::Singleton<Common::ElfInfo>::Instance()->GameSerial());
+    if (!warmupCacheOnly) {
+        UpdatePlayTime(Common::Singleton<Common::ElfInfo>::Instance()->GameSerial());
+    }
     if (controllers) {
         controllers->ResetLightbarColors();
         // need to give SDL time to do this before the runtime exits
@@ -598,6 +606,21 @@ void Emulator::Run(std::filesystem::path file, std::vector<std::string> args,
                                                    window_title);
 
     g_window = window.get();
+
+    if (warmupCacheOnly) {
+        EmulatorSettings.SetPipelineCacheEnabled(true, true);
+        liverpool = std::make_unique<AmdGpu::Liverpool>();
+        presenter = std::make_unique<Vulkan::Presenter>(*g_window, liverpool.get());
+        const auto& cache = presenter->GetRasterizer().GetPipelineCache();
+        const auto loaded = cache.GetPreloadedCount();
+        const auto total = cache.GetPreloadTotal();
+        Storage::DataBase::Instance().Close();
+        std::cout << "SCSKILLER_WARM {\"loaded\":" << loaded << ",\"total\":" << total << "}"
+                  << std::endl;
+        Common::Log::Flush();
+        warmupExitCode = cache.IsNvidiaDriver() && loaded > 0 && loaded == total ? 0 : 1;
+        return;
+    }
 
     if (auto icon = mnt->ReadFile("/app0/sce_sys/icon0.png")) {
         window->SetIcon(*icon);

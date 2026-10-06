@@ -47,6 +47,8 @@ public:
 
     const char* executableName;
     bool waitForDebuggerBeforeRun{false};
+    bool warmupCacheOnly{false};
+    int warmupExitCode{1};
 
 private:
     void LoadSystemModules(const std::string& game_serial);

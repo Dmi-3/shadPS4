@@ -334,6 +334,10 @@ PipelineCache::PipelineCache(const Instance& instance_, Scheduler& scheduler_,
 
 PipelineCache::~PipelineCache() = default;
 
+bool PipelineCache::IsNvidiaDriver() const {
+    return instance.GetDriverID() == vk::DriverId::eNvidiaProprietary;
+}
+
 const GraphicsPipeline* PipelineCache::GetGraphicsPipeline(const DrawIndirectParams params) {
     draw_indirect_params = params;
     if (!RefreshGraphicsKey()) {
