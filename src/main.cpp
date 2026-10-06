@@ -69,6 +69,7 @@ int main(int argc, char* argv[]) {
     bool sameProcess = false;
     bool append_log{};
     bool warmup_cache{};
+    std::optional<std::filesystem::path> warm_template;
 
     std::optional<std::filesystem::path> addGameFolder;
     std::optional<std::filesystem::path> setAddonFolder;
@@ -105,6 +106,9 @@ int main(int argc, char* argv[]) {
     app.add_flag("--log-append", append_log);
     app.add_flag("--warmup-cache", warmup_cache,
                  "Preload the recorded pipeline cache without executing the game");
+    app.add_option("--warmup-template", warm_template,
+                   "Experimental compute shader warmup with placeholder resource descriptors")
+        ->check(CLI::ExistingFile);
 
     app.add_option("--add-game-folder", addGameFolder)->check(CLI::ExistingDirectory);
     app.add_option("--set-addon-folder", setAddonFolder)->check(CLI::ExistingDirectory);
@@ -161,6 +165,7 @@ int main(int argc, char* argv[]) {
     // Initialize key manager
     KeyManager::GetInstance()->LoadFromFile();
 
+    warmup_cache = warmup_cache || warm_template.has_value();
     // Load configurations
     EmulatorSettings.Load();
     if (!warmup_cache) {
@@ -260,6 +265,9 @@ int main(int argc, char* argv[]) {
     emulator->executableName = argv[0];
     emulator->waitForDebuggerBeforeRun = waitForDebugger;
     emulator->warmupCacheOnly = warmup_cache;
+    if (warm_template) {
+        emulator->warmTemplateFile = *warm_template;
+    }
     emulator->Run(ebootPath, gameArgs, overrideRoot, mounts, env_vars, append_log);
 
     if (warmup_cache) {

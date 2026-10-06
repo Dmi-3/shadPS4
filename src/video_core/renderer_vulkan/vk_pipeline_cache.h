@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <filesystem>
 #include <variant>
 #include <tsl/robin_map.h>
 #include "shader_recompiler/profile.h"
@@ -76,6 +77,8 @@ public:
     ~PipelineCache();
 
     void WarmUp();
+    std::pair<u64, int> WarmComputeTemplate(std::span<const u32> binary,
+                                            const std::filesystem::path& reference_directory);
     u32 GetPreloadedCount() const {
         return preloaded_count;
     }

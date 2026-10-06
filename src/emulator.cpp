@@ -289,6 +289,11 @@ void Emulator::Run(std::filesystem::path file, std::vector<std::string> args,
                    std::vector<std::pair<std::filesystem::path, std::string>> mounts,
                    std::vector<std::string> const& env_vars, bool append_log) {
     Common::SetCurrentThreadName("shadPS4:Main");
+#ifdef _WIN32
+    if (warmupCacheOnly) {
+        SetPriorityClass(GetCurrentProcess(), BELOW_NORMAL_PRIORITY_CLASS);
+    }
+#endif
     if (waitForDebuggerBeforeRun) {
         Debugger::WaitForDebuggerAttach();
     }
@@ -605,15 +610,45 @@ void Emulator::Run(std::filesystem::path file, std::vector<std::string> args,
     }
     window = std::make_unique<Frontend::WindowSDL>(EmulatorSettings.GetWindowWidth(),
                                                    EmulatorSettings.GetWindowHeight(), controllers,
-                                                   window_title);
+                                                   window_title, warmupCacheOnly);
 
     g_window = window.get();
 
     if (warmupCacheOnly) {
-        EmulatorSettings.SetPipelineCacheEnabled(true, true);
+        EmulatorSettings.SetPipelineCacheEnabled(warmTemplateFile.empty(), true);
         liverpool = std::make_unique<AmdGpu::Liverpool>();
         presenter = std::make_unique<Vulkan::Presenter>(*g_window, liverpool.get());
-        const auto& cache = presenter->GetRasterizer().GetPipelineCache();
+        auto& cache = presenter->GetRasterizer().GetPipelineCache();
+        if (!warmTemplateFile.empty()) {
+            try {
+                if (!cache.IsNvidiaDriver()) {
+                    throw std::runtime_error("Template warmup currently requires NVIDIA");
+                }
+                std::ifstream input(warmTemplateFile, std::ios::binary | std::ios::ate);
+                const auto bytes = input.tellg();
+                if (bytes < 32 || bytes > (64 << 20) || bytes % 4) {
+                    throw std::runtime_error("Invalid compute shader container size");
+                }
+                std::vector<u32> binary(static_cast<size_t>(bytes) / 4);
+                input.seekg(0);
+                input.read(reinterpret_cast<char*>(binary.data()), bytes);
+                if (input.gcount() != bytes) {
+                    throw std::runtime_error("Could not read compute shader container");
+                }
+                const auto [hash, recorded_match] = cache.WarmComputeTemplate(
+                    binary, Common::FS::GetUserPath(Common::FS::PathType::CacheDir) / id);
+                std::cout << fmt::format("SCSKILLER_TEMPLATE "
+                                         "{{\"compiled\":1,\"hash\":\"{:016x}\",\"assumed\":true,"
+                                         "\"recorded_match\":{}}}",
+                                         hash, recorded_match)
+                          << std::endl;
+                warmupExitCode = 0;
+            } catch (const std::exception& error) {
+                std::cerr << "Template warmup failed: " << error.what() << std::endl;
+            }
+            Common::Log::Flush();
+            return;
+        }
         const auto loaded = cache.GetPreloadedCount();
         const auto total = cache.GetPreloadTotal();
         Storage::DataBase::Instance().Close();

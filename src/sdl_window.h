@@ -49,7 +49,7 @@ class WindowSDL {
 
 public:
     explicit WindowSDL(s32 width, s32 height, Input::GameControllers* controllers,
-                       std::string_view window_title);
+                       std::string_view window_title, bool hidden = false);
     ~WindowSDL();
 
     s32 GetWidth() const {

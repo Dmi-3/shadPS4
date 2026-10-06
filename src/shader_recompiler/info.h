@@ -112,6 +112,7 @@ struct Info : InfoPersistent {
     u32 uses_patches{};
 
     VAddr pgm_base;
+    bool offline_template{};
     bool has_storage_images{};
     bool has_discard{};
     bool has_image_gather{};
@@ -149,6 +150,9 @@ struct Info : InfoPersistent {
 
     template <typename T>
     T ReadUdReg(u32 ptr_index, u32 dword_offset) const noexcept {
+        if (offline_template) {
+            return T{};
+        }
         T data;
         const u32* base = user_data.data();
         if (ptr_index != IR::NumScalarRegs) {
@@ -168,7 +172,7 @@ struct Info : InfoPersistent {
         flattened_ud_buf.resize(srt_info.flattened_bufsize_dw);
         ASSERT(user_data.size() <= NUM_USER_DATA_REGS);
         std::memcpy(flattened_ud_buf.data(), user_data.data(), user_data.size_bytes());
-        if (srt_info.walker_func) {
+        if (srt_info.walker_func && !offline_template) {
             srt_info.walker_func(user_data.data(), flattened_ud_buf.data());
         }
     }

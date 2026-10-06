@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright 2024-2026 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <fstream>
 #include <ranges>
 
 #include "common/hash.h"
@@ -21,6 +22,89 @@
 #include "video_core/renderer_vulkan/vk_shader_util.h"
 
 namespace Vulkan {
+
+std::pair<u64, int> PipelineCache::WarmComputeTemplate(
+    std::span<const u32> binary, const std::filesystem::path& reference_directory) {
+    // Experimental standalone path: no guest descriptors, no recorded cache entries.
+    size_t header = 0;
+    while (header < binary.size() && binary[header] != 0x72646853) {
+        ++header;
+    }
+    if (header + 13 >= binary.size() || (binary[header + 2] & 0xff) != 4) {
+        throw std::runtime_error("Not a supported GNM compute shader container");
+    }
+    size_t code_offset = header + 4 + ((binary[header + 2] >> 8) & 0xff);
+    if (code_offset + 2 >= binary.size() || binary[code_offset] != 0xBEEB03FF) {
+        throw std::runtime_error("Invalid compute shader code offset");
+    }
+    const auto info_offset = code_offset + (u64(binary[code_offset + 1]) + 1) * 2;
+    if (info_offset + 8 > binary.size()) {
+        throw std::runtime_error("Compute shader binary info exceeds bounds");
+    }
+    AmdGpu::BinaryInfo binary_info{};
+    std::memcpy(&binary_info, binary.data() + info_offset, sizeof(binary_info));
+    if (!binary_info.Valid() || !binary_info.length || binary_info.length % 4 ||
+        code_offset + binary_info.length / 4 > binary.size()) {
+        throw std::runtime_error("Invalid compute shader binary info");
+    }
+    AmdGpu::UserData user_data{};
+    Shader::ShaderParams params{user_data, binary.subspan(code_offset, binary_info.length / 4),
+                                binary_info.shader_hash};
+    Shader::Info info{Shader::HwStage::Compute, Shader::SwStage::Compute, params};
+    info.offline_template = true;
+    auto& cs = liverpool->GetCsRegs();
+    std::memcpy(&cs.settings, binary.data() + header + 8, sizeof(cs.settings));
+    cs.num_thread_x.full = binary[header + 10] & 0xffff;
+    cs.num_thread_y.full = binary[header + 11] & 0xffff;
+    cs.num_thread_z.full = binary[header + 12] & 0xffff;
+    if (!cs.num_thread_x.full || !cs.num_thread_y.full || !cs.num_thread_z.full) {
+        throw std::runtime_error("Invalid compute workgroup dimensions");
+    }
+    Shader::RuntimeInfo runtime =
+        BuildRuntimeInfo(Shader::HwStage::Compute, Shader::SwStage::Compute);
+    Shader::Backend::Bindings bindings{};
+    auto program = Shader::TranslateProgram(params.code, pools, info, runtime, profile);
+    auto spv = Shader::Backend::SPIRV::EmitSPIRV(profile, runtime, program, bindings);
+    if (info.translation_failed || spv.empty()) {
+        throw std::runtime_error("Compute template translation failed");
+    }
+    int recorded_match = -1;
+    if (std::filesystem::is_directory(reference_directory)) {
+        const auto prefix = fmt::format("{:#018x}_", params.hash);
+        for (const auto& file : std::filesystem::directory_iterator(reference_directory)) {
+            if (file.path().extension() != ".spv" ||
+                !file.path().filename().string().starts_with(prefix)) {
+                continue;
+            }
+            if (recorded_match < 0) {
+                recorded_match = 0;
+            }
+            if (file.file_size() != spv.size() * sizeof(u32)) {
+                continue;
+            }
+            std::vector<u32> recorded(spv.size());
+            std::ifstream input(file.path(), std::ios::binary);
+            input.read(reinterpret_cast<char*>(recorded.data()), spv.size() * sizeof(u32));
+            if (input && recorded == spv) {
+                recorded_match = 1;
+                break;
+            }
+        }
+    }
+    auto module = CompileSPV(spv, instance.GetDevice());
+    try {
+        ComputePipelineKey key{};
+        key.value = HashCombine(params.hash, 0);
+        ComputePipeline::SerializationSupport data{};
+        ComputePipeline pipeline{instance, scheduler, desc_heap, profile, *pipeline_cache,
+                                 key,      info,      module,    data,    true};
+    } catch (...) {
+        instance.GetDevice().destroyShaderModule(module);
+        throw;
+    }
+    instance.GetDevice().destroyShaderModule(module);
+    return {params.hash, recorded_match};
+}
 
 using Shader::HwStage;
 using Shader::Output;
