@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Standalone Windows write watch. Does not change guest memory or handle guest exceptions.
 #include <windows.h>
+#include <share.h>
 #include <chrono>
 #include <cstdio>
 #include <cwchar>
@@ -40,7 +41,8 @@ int wmain(int argc, wchar_t** argv) {
     const auto address = std::wcstoull(argv[1], &end, 0);
     if (!address || *end || (address & 3) || address > 0x7FFFFFFFFFFFULL) return 2;
     FILE* log{};
-    if (_wfopen_s(&log,argv[3],L"w") || !log) return 3;
+    log=_wfsopen(argv[3],L"w",_SH_DENYNO);
+    if (!log) return 3;
     setvbuf(log,nullptr,_IONBF,0);
     std::wstring command = Quote(argv[2]);
     for (int i=4;i<argc;++i) command += L" " + Quote(argv[i]);
@@ -59,6 +61,12 @@ int wmain(int argc, wchar_t** argv) {
     bool timeout_requested = false;
     std::fprintf(log,"pid=%lu watch=%llx width=4 timeout_seconds=240\n",process.dwProcessId,address);
     while (!stop) {
+        if (!timeout_requested && std::chrono::steady_clock::now()>deadline) {
+            timeout_requested=true;
+            if (!DebugBreakProcess(process.hProcess)) {
+                std::fprintf(log,"timeout break failed\n"); break;
+            }
+        }
         DEBUG_EVENT event{};
         if (!WaitForDebugEvent(&event,1000)) {
             if (GetLastError()!=ERROR_SEM_TIMEOUT) { std::fprintf(log,"wait failed=%lu\n",GetLastError()); break; }
