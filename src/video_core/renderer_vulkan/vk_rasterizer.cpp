@@ -1,10 +1,18 @@
 // SPDX-FileCopyrightText: Copyright 2024-2026 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <array>
+#include <atomic>
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 #include "common/debug.h"
+#include "shader_recompiler/profile.h"
 #include "core/debug_state.h"
 #include "core/emulator_settings.h"
 #include "core/memory.h"
+#include "shader_recompiler/profile.h"
 #include "shader_recompiler/runtime_info.h"
 #include "video_core/amdgpu/liverpool.h"
 #include "video_core/buffer_cache/buffer.h"
@@ -20,6 +28,49 @@
 #include "video_core/texture_cache/texture_cache.h"
 
 namespace Vulkan {
+
+// Read-only probe for the source path observed in the local weapon capture.
+// Keep this separate from arithmetic interventions and never dereference guest pointers.
+static void DiagnoseUnchartedMaterialSource(const Shader::Info& stage) {
+#ifdef _WIN32
+    if (!Shader::diagnose_uncharted_material_source || stage.pgm_hash != 0x90d1b3c4ULL ||
+        stage.flattened_ud_buf.size() < 77 || stage.user_data.size() < 2) {
+        return;
+    }
+    const auto& flat = stage.flattened_ud_buf;
+    const auto is_nan = [](u32 word) {
+        return (word & 0x7f800000U) == 0x7f800000U && (word & 0x007fffffU) != 0;
+    };
+    if (!is_nan(flat[74]) && !is_nan(flat[75]) && !is_nan(flat[76])) {
+        return;
+    }
+    static std::atomic_uint samples{};
+    if (samples.load(std::memory_order_relaxed) >= 8 ||
+        samples.fetch_add(1, std::memory_order_relaxed) >= 8) {
+        return;
+    }
+    const auto pointer = [](u32 lo, u32 hi) {
+        return (u64(lo) | (u64(hi) << 32)) & 0xFFFFFFFFFFFFULL;
+    };
+    const auto read = [](u64 address, void* out, size_t size) {
+        SIZE_T copied{};
+        return ReadProcessMemory(GetCurrentProcess(), reinterpret_cast<const void*>(address), out,
+                                 size, &copied) && copied == size;
+    };
+    const u64 root = pointer(stage.user_data[0], stage.user_data[1]);
+    std::array<u32, 2> nested{};
+    const bool root_ok = read(root, nested.data(), sizeof(nested));
+    const u64 source = root_ok ? pointer(nested[0], nested[1]) : 0;
+    std::array<u32, 3> words{};
+    const bool source_ok = root_ok && read(source, words.data(), sizeof(words));
+    LOG_WARNING(Render_Vulkan,
+                "Material source probe: root={:#x} root_read={} source={:#x} source_read={} "
+                "flat_pointer={:#x} guest=[{:#010x},{:#010x},{:#010x}] "
+                "flat=[{:#010x},{:#010x},{:#010x}]",
+                root, root_ok, source, source_ok, pointer(flat[16], flat[17]), words[0], words[1],
+                words[2], flat[74], flat[75], flat[76]);
+#endif
+}
 
 static Shader::PushData MakeUserData(const AmdGpu::Regs& regs) {
     // TODO(roamic): Add support for multiple viewports and geometry shaders when ViewportIndex
@@ -728,6 +779,7 @@ void Rasterizer::BindBuffers(const Shader::Info& stage, Shader::Backend::Binding
                     runtime.IsBufferAccessed(gds_buf, 0, gds_buf->SizeBytes(), desc.is_written);
                 bound_buffers.emplace_back(gds_buf, 0, gds_buf->SizeBytes(), desc.is_written);
             } else if (desc.buffer_type == Shader::BufferType::Flatbuf) {
+                DiagnoseUnchartedMaterialSource(stage);
                 auto& vk_buffer = buffer_cache.GetStreamBuffer();
                 const u32 ubo_size = stage.flattened_ud_buf.size() * sizeof(u32);
                 const u64 offset =

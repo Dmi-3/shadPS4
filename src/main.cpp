@@ -73,6 +73,7 @@ int main(int argc, char* argv[]) {
     bool sync_submit_done{};
     bool renderdoc_present_capture{};
     bool diagnose_zero_nan_products{};
+    bool diagnose_uncharted_material_source{};
     std::optional<std::filesystem::path> warm_template;
 
     std::optional<std::filesystem::path> addGameFolder;
@@ -116,6 +117,8 @@ int main(int argc, char* argv[]) {
                  "Diagnostic: capture a single presented frame with RenderDoc");
     app.add_flag("--diagnose-zero-nan-products", diagnose_zero_nan_products,
                  "Diagnostic: replace zero times NaN with zero; use an isolated shader cache");
+    app.add_flag("--diagnose-uncharted-material-source", diagnose_uncharted_material_source,
+                 "Diagnostic: compare captured weapon constants with guest memory on Windows");
     app.add_option("--warmup-template", warm_template,
                    "Experimental compute shader warmup with placeholder resource descriptors")
         ->check(CLI::ExistingFile);
@@ -278,6 +281,7 @@ int main(int argc, char* argv[]) {
     emulator->syncSubmitDone = sync_submit_done;
     emulator->renderdocPresentCapture = renderdoc_present_capture;
     Shader::diagnose_zero_nan_products = diagnose_zero_nan_products;
+    Shader::diagnose_uncharted_material_source = diagnose_uncharted_material_source;
     if (diagnose_zero_nan_products) {
         LOG_WARNING(Config,
                     "Diagnostic zero-times-NaN arithmetic enabled; isolated shader cache selected");
