@@ -31,7 +31,8 @@ namespace Vulkan {
 
 // Read-only probe for the source path observed in the local weapon capture.
 // Keep this separate from arithmetic interventions and never dereference guest pointers.
-static void DiagnoseUnchartedMaterialSource(const Shader::Info& stage) {
+static void DiagnoseUnchartedMaterialSource(const Shader::Info& stage,
+                                             VideoCore::BufferCache& cache) {
 #ifdef _WIN32
     if (!Shader::diagnose_uncharted_material_source || stage.pgm_hash != 0x90d1b3c4ULL ||
         stage.flattened_ud_buf.size() < 77 || stage.user_data.size() < 2) {
@@ -63,12 +64,13 @@ static void DiagnoseUnchartedMaterialSource(const Shader::Info& stage) {
     const u64 source = root_ok ? pointer(nested[0], nested[1]) : 0;
     std::array<u32, 3> words{};
     const bool source_ok = root_ok && read(source, words.data(), sizeof(words));
+    const bool gpu_modified = source_ok && cache.IsRegionGpuModified(source, sizeof(words));
     LOG_WARNING(Render_Vulkan,
                 "Material source probe: root={:#x} root_read={} source={:#x} source_read={} "
                 "flat_pointer={:#x} guest=[{:#010x},{:#010x},{:#010x}] "
-                "flat=[{:#010x},{:#010x},{:#010x}]",
+                "flat=[{:#010x},{:#010x},{:#010x}] gpu_modified={}",
                 root, root_ok, source, source_ok, pointer(flat[16], flat[17]), words[0], words[1],
-                words[2], flat[74], flat[75], flat[76]);
+                words[2], flat[74], flat[75], flat[76], gpu_modified);
 #endif
 }
 
@@ -779,7 +781,7 @@ void Rasterizer::BindBuffers(const Shader::Info& stage, Shader::Backend::Binding
                     runtime.IsBufferAccessed(gds_buf, 0, gds_buf->SizeBytes(), desc.is_written);
                 bound_buffers.emplace_back(gds_buf, 0, gds_buf->SizeBytes(), desc.is_written);
             } else if (desc.buffer_type == Shader::BufferType::Flatbuf) {
-                DiagnoseUnchartedMaterialSource(stage);
+                DiagnoseUnchartedMaterialSource(stage, buffer_cache);
                 auto& vk_buffer = buffer_cache.GetStreamBuffer();
                 const u32 ubo_size = stage.flattened_ud_buf.size() * sizeof(u32);
                 const u64 offset =
