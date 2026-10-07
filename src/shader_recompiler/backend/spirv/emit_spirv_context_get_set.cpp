@@ -54,6 +54,18 @@ Id EmitGetUserData(EmitContext& ctx, IR::ScalarReg reg) {
 
 Id EmitReadConst(EmitContext& ctx, IR::Inst* inst, Id addr, Id offset) {
     const u32 flatbuf_off_dw = inst->Flags<u32>();
+    // Local capture identified these three scalar material words as the NaN source.
+    // This is an opt-in symptom isolation, not a change to guest arithmetic or memory.
+    if (Shader::diagnose_weapon_material_nan && ctx.info.pgm_hash == 0x90d1b3c4ULL &&
+        flatbuf_off_dw >= 74 && flatbuf_off_dw <= 76) {
+        const Id word = ctx.EmitFlatbufferLoad(ctx.ConstU32(flatbuf_off_dw));
+        const Id exponent = ctx.OpBitwiseAnd(ctx.U32[1], word, ctx.ConstU32(0x7f800000U));
+        const Id mantissa = ctx.OpBitwiseAnd(ctx.U32[1], word, ctx.ConstU32(0x007fffffU));
+        const Id is_nan = ctx.OpLogicalAnd(
+            ctx.U1[1], ctx.OpIEqual(ctx.U1[1], exponent, ctx.ConstU32(0x7f800000U)),
+            ctx.OpINotEqual(ctx.U1[1], mantissa, ctx.ConstU32(0U)));
+        return ctx.OpSelect(ctx.U32[1], is_nan, ctx.ConstU32(0U), word);
+    }
     if (!EmulatorSettings.IsDirectMemoryAccessEnabled()) {
         return ctx.EmitFlatbufferLoad(ctx.ConstU32(flatbuf_off_dw));
     }

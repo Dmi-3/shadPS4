@@ -97,7 +97,11 @@ void DataBase::Open() {
 
     using namespace Common::FS;
     auto cache_root = GetUserPath(PathType::CacheDir);
-    if (Shader::diagnose_zero_nan_products) {
+    if (Shader::diagnose_weapon_material_nan) {
+        cache_root /= Shader::diagnose_zero_nan_products ? "weapon-material-nan-zero-products-v1"
+                                                       : "weapon-material-nan-diagnostic-v1";
+        std::filesystem::create_directories(cache_root);
+    } else if (Shader::diagnose_zero_nan_products) {
         cache_root /= "zero-nan-diagnostic-v1";
         std::filesystem::create_directories(cache_root);
     }

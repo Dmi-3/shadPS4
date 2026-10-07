@@ -10,6 +10,7 @@ namespace Shader {
 // Opt-in replay investigation only; normal IEEE arithmetic remains the default.
 inline bool diagnose_zero_nan_products{};
 inline bool diagnose_uncharted_material_source{};
+inline bool diagnose_weapon_material_nan{};
 
 struct Profile {
     u32 max_viewport_width{};
